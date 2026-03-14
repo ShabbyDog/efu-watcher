@@ -52,7 +52,10 @@ log = logging.getLogger(__name__)
 
 
 def check_mount(watch_root: str) -> bool:
-    return os.path.ismount(watch_root) and os.access(watch_root, os.R_OK)
+    # os.path.ismount() only returns True for actual mountpoints, not for
+    # subdirectories within a mount (e.g. /mnt/cube/Storage inside /mnt/cube).
+    # Check existence and readability instead; that's what we actually need.
+    return os.path.isdir(watch_root) and os.access(watch_root, os.R_OK)
 
 
 def wait_for_mount(
@@ -60,7 +63,7 @@ def wait_for_mount(
 ) -> bool:
     if check_mount(watch_root):
         return True
-    log.warning("%s is not mounted; waiting...", watch_root)
+    log.warning("%s is not available; waiting...", watch_root)
     while not stop_event.is_set():
         stop_event.wait(timeout=retry_interval)
         if check_mount(watch_root):
