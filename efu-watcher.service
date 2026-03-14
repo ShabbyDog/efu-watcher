@@ -1,17 +1,18 @@
 [Unit]
-Description=Everything EFU File List Watcher for /mnt/cube/Storage
-Documentation=https://github.com/bcm/efu-watcher
+Description=Everything EFU File List Watcher
+Documentation=https://github.com/ShabbyDog/efu-watcher
 After=network.target
 # WantsMountsFor tells systemd to order us after whatever .mount unit owns
-# /mnt/cube/Storage, without requiring you to know its exact unit name.
+# WATCH_ROOT, without requiring you to know its exact unit name.
+# Change the path below to match your WATCH_ROOT setting.
 # If the mount is not yet active at start time, the daemon's built-in
 # wait_for_mount() loop will retry every 30 seconds until it appears.
-WantsMountsFor=/mnt/cube/Storage
+WantsMountsFor=/mnt/share
 
 [Service]
 Type=simple
-User=cube
-Group=cube
+User=efu-watcher
+Group=efu-watcher
 WorkingDirectory=/opt/efu-watcher
 
 ExecStart=/opt/efu-watcher/venv/bin/python -m efu_watcher.main
@@ -28,12 +29,13 @@ SyslogIdentifier=efu-watcher
 Environment=PYTHONUNBUFFERED=1
 
 # Daemon configuration — override any of these in /etc/efu-watcher/config.env
-Environment=WATCH_ROOT=/mnt/cube/Storage
-Environment=EFU_PATH=/mnt/cube/Storage/.everything_index.efu
+# These defaults must be changed to match your environment.
+Environment=WATCH_ROOT=/mnt/share
+Environment=EFU_PATH=/mnt/share/.everything_index.efu
 Environment=DB_PATH=/var/lib/efu-watcher/index.db
-Environment=UNC_HOST=cube.local
-Environment=UNC_SHARE=Storage
-# Uncomment and set WIN_PATH_PREFIX to use a drive letter instead of UNC.
+Environment=UNC_HOST=fileserver.local
+Environment=UNC_SHARE=share
+# Set WIN_PATH_PREFIX to use a drive letter (e.g. Z:) instead of a UNC path.
 # When set, UNC_HOST and UNC_SHARE are ignored.
 #Environment=WIN_PATH_PREFIX=Z:
 Environment=DEBOUNCE_WINDOW=3.0
@@ -41,11 +43,12 @@ Environment=DAILY_REBUILD_HOUR=3
 Environment=LOG_LEVEL=INFO
 Environment=MAX_PATCH_SIZE_MB=200
 
-# Optional site-local overrides (file is silently ignored if absent)
+# Site-local overrides (file is silently ignored if absent).
+# Copy config.env.example to /etc/efu-watcher/config.env and edit it there.
 EnvironmentFile=-/etc/efu-watcher/config.env
 
-# Filesystem hardening
-ReadWritePaths=/mnt/cube/Storage /var/lib/efu-watcher
+# Filesystem hardening — add your WATCH_ROOT to ReadWritePaths
+ReadWritePaths=/mnt/share /var/lib/efu-watcher
 PrivateTmp=true
 NoNewPrivileges=true
 ProtectSystem=strict

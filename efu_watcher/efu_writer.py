@@ -66,8 +66,8 @@ def posix_to_win_path(posix_path: str, watch_root: str, win_prefix: str) -> str:
     Convert an absolute POSIX path under watch_root to a Windows path string.
 
     win_prefix is the Windows-side root, e.g.:
-        "\\\\cube.local\\Storage"  ->  \\cube.local\Storage\foo\bar.txt
-        "Z:"                       ->  Z:\foo\bar.txt
+        "\\\\fileserver.local\\share"  ->  \\fileserver.local\share\foo\bar.txt
+        "Z:"                           ->  Z:\foo\bar.txt
 
     The prefix must NOT have a trailing backslash.
     """

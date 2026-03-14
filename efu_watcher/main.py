@@ -54,7 +54,7 @@ log = logging.getLogger(__name__)
 
 def check_mount(watch_root: str) -> bool:
     # os.path.ismount() only returns True for actual mountpoints, not for
-    # subdirectories within a mount (e.g. /mnt/cube/Storage inside /mnt/cube).
+    # subdirectories within a mount (e.g. a share directory inside /mnt/nas).
     # Check existence and readability instead; that's what we actually need.
     return os.path.isdir(watch_root) and os.access(watch_root, os.R_OK)
 
