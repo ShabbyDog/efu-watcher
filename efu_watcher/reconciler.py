@@ -45,15 +45,13 @@ class Reconciler:
         watch_root: str,
         db: "Database",
         efu_writer: "EfuWriter",
-        unc_host: str,
-        unc_share: str,
+        win_prefix: str,
         exclude_paths: set[str],
     ) -> None:
         self._watch_root = watch_root
         self._db = db
         self._efu_writer = efu_writer
-        self._unc_host = unc_host
-        self._unc_share = unc_share
+        self._win_prefix = win_prefix
         self._exclude = exclude_paths
 
     def run(self) -> None:
@@ -84,12 +82,12 @@ class Reconciler:
             st = disk_entries[path]
             db_row = self._db.get_file(path)
             if db_row and self._is_modified(db_row, st):
-                row = stat_to_row(path, st, self._watch_root, self._unc_host, self._unc_share)
+                row = stat_to_row(path, st, self._watch_root, self._win_prefix)
                 modified_rows.append(row)
 
         # Build rows for new paths
         new_rows = [
-            stat_to_row(p, disk_entries[p], self._watch_root, self._unc_host, self._unc_share)
+            stat_to_row(p, disk_entries[p], self._watch_root, self._win_prefix)
             for p in new_paths
         ]
 

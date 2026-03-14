@@ -13,6 +13,9 @@ EFU_PATH = "/mnt/cube/Storage/.everything_index.efu"
 DB_PATH = "/var/lib/efu-watcher/index.db"
 UNC_HOST = "cube.local"
 UNC_SHARE = "Storage"
+# Optional override: set WIN_PATH_PREFIX to use a drive letter (e.g. "Z:") or
+# any custom prefix instead of constructing \\UNC_HOST\UNC_SHARE automatically.
+WIN_PATH_PREFIX = ""
 DEBOUNCE_WINDOW = 3.0       # seconds to wait after last event before flushing
 DAILY_REBUILD_HOUR = 3      # hour (0-23) at which to run the daily full rebuild
 MAX_PATCH_SIZE_MB = 200     # above this, force full rebuild instead of patching

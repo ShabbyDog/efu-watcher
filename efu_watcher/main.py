@@ -30,9 +30,10 @@ from efu_watcher import (
     UNC_HOST,
     UNC_SHARE,
     WATCH_ROOT,
+    WIN_PATH_PREFIX,
 )
 from efu_watcher.database import Database
-from efu_watcher.efu_writer import EfuWriter, has_surrogates, make_efu_line, posix_to_unc, stat_to_row
+from efu_watcher.efu_writer import EfuWriter, has_surrogates, make_efu_line, posix_to_win_path, stat_to_row
 from efu_watcher.reconciler import Reconciler
 from efu_watcher.watcher import (
     EVT_CREATE,
@@ -91,8 +92,7 @@ class EventProcessor(threading.Thread):
         efu_writer: EfuWriter,
         stop_event: threading.Event,
         watch_root: str,
-        unc_host: str,
-        unc_share: str,
+        win_prefix: str,
         exclude_paths: set[str],
         debounce_window: float = 3.0,
     ) -> None:
@@ -103,8 +103,7 @@ class EventProcessor(threading.Thread):
         self._efu = efu_writer
         self._stop = stop_event
         self._watch_root = watch_root
-        self._unc_host = unc_host
-        self._unc_share = unc_share
+        self._win_prefix = win_prefix
         self._exclude = exclude_paths
         self._debounce = debounce_window
 
@@ -278,7 +277,7 @@ class EventProcessor(threading.Thread):
                 for r in rows:
                     self._efu.append_line(r["efu_line"])
 
-        row = stat_to_row(path, st, self._watch_root, self._unc_host, self._unc_share)
+        row = stat_to_row(path, st, self._watch_root, self._win_prefix)
         self._db.upsert_file(**row)
         self._efu.append_line(row["efu_line"])
 
@@ -308,7 +307,7 @@ class EventProcessor(threading.Thread):
         except OSError:
             return True  # Deleted before we processed modify
 
-        row = stat_to_row(path, st, self._watch_root, self._unc_host, self._unc_share)
+        row = stat_to_row(path, st, self._watch_root, self._win_prefix)
         self._db.upsert_file(**row)
 
         if old_line is None:
@@ -322,8 +321,8 @@ class EventProcessor(threading.Thread):
 
     def _handle_rename(self, from_path: str, to_path: str, is_dir: bool) -> bool:
         def _make_efu_line(path, size, date_modified, date_created, attributes):
-            unc = posix_to_unc(path, self._watch_root, self._unc_host, self._unc_share)
-            return make_efu_line(unc, size, date_modified, date_created, attributes)
+            win_path = posix_to_win_path(path, self._watch_root, self._win_prefix)
+            return make_efu_line(win_path, size, date_modified, date_created, attributes)
 
         if is_dir:
             pairs = self._db.rename_directory(from_path, to_path, _make_efu_line)
@@ -343,7 +342,7 @@ class EventProcessor(threading.Thread):
                 self._db.delete_file(from_path)
                 return self._efu.patch_line(old_line, None) if old_line else True
 
-            row = stat_to_row(to_path, st, self._watch_root, self._unc_host, self._unc_share)
+            row = stat_to_row(to_path, st, self._watch_root, self._win_prefix)
             self._db.delete_file(from_path)
             self._db.upsert_file(**row)
             return self._efu.patch_line(old_line, row["efu_line"])
@@ -360,7 +359,7 @@ class EventProcessor(threading.Thread):
                     try:
                         st = os.stat(full)
                         rows.append(
-                            stat_to_row(full, st, self._watch_root, self._unc_host, self._unc_share)
+                            stat_to_row(full, st, self._watch_root, self._win_prefix)
                         )
                     except OSError:
                         pass
@@ -369,7 +368,7 @@ class EventProcessor(threading.Thread):
                     try:
                         st = os.stat(full)
                         rows.append(
-                            stat_to_row(full, st, self._watch_root, self._unc_host, self._unc_share)
+                            stat_to_row(full, st, self._watch_root, self._win_prefix)
                         )
                     except OSError:
                         pass
@@ -471,9 +470,18 @@ def main() -> int:
     rebuild_hour = int(os.environ.get("DAILY_REBUILD_HOUR", DAILY_REBUILD_HOUR))
     max_patch_mb = int(os.environ.get("MAX_PATCH_SIZE_MB", MAX_PATCH_SIZE_MB))
 
+    # WIN_PATH_PREFIX overrides UNC_HOST+UNC_SHARE entirely.
+    # Use it to supply a drive letter (e.g. "Z:") or any other Windows prefix.
+    # If unset, construct the standard \\host\share UNC prefix.
+    win_path_prefix = os.environ.get("WIN_PATH_PREFIX", WIN_PATH_PREFIX).rstrip("\\")
+    if win_path_prefix:
+        win_prefix = win_path_prefix
+    else:
+        win_prefix = f"\\\\{unc_host}\\{unc_share}"
+
     log.info("efu-watcher starting")
     log.info("  WATCH_ROOT=%s  EFU_PATH=%s  DB_PATH=%s", watch_root, efu_path, db_path)
-    log.info("  UNC=\\\\%s\\%s  DEBOUNCE=%.1fs  REBUILD_HOUR=%d", unc_host, unc_share, debounce, rebuild_hour)
+    log.info("  WIN_PREFIX=%s  DEBOUNCE=%.1fs  REBUILD_HOUR=%d", win_prefix, debounce, rebuild_hour)
 
     stop_event = threading.Event()
 
@@ -509,8 +517,7 @@ def main() -> int:
         watch_root=watch_root,
         db=db,
         efu_writer=efu_writer,
-        unc_host=unc_host,
-        unc_share=unc_share,
+        win_prefix=win_prefix,
         exclude_paths=exclude_paths,
     )
     try:
@@ -526,8 +533,7 @@ def main() -> int:
         efu_writer=efu_writer,
         stop_event=stop_event,
         watch_root=watch_root,
-        unc_host=unc_host,
-        unc_share=unc_share,
+        win_prefix=win_prefix,
         exclude_paths=exclude_paths,
         debounce_window=debounce,
     )

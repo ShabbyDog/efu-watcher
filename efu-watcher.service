@@ -33,6 +33,9 @@ Environment=EFU_PATH=/mnt/cube/Storage/.everything_index.efu
 Environment=DB_PATH=/var/lib/efu-watcher/index.db
 Environment=UNC_HOST=cube.local
 Environment=UNC_SHARE=Storage
+# Uncomment and set WIN_PATH_PREFIX to use a drive letter instead of UNC.
+# When set, UNC_HOST and UNC_SHARE are ignored.
+#Environment=WIN_PATH_PREFIX=Z:
 Environment=DEBOUNCE_WINDOW=3.0
 Environment=DAILY_REBUILD_HOUR=3
 Environment=LOG_LEVEL=INFO

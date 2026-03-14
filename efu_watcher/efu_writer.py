@@ -61,17 +61,25 @@ def attrs_from_stat(st: os.stat_result, name: str) -> int:
     return flags
 
 
-def posix_to_unc(posix_path: str, watch_root: str, unc_host: str, unc_share: str) -> str:
+def posix_to_win_path(posix_path: str, watch_root: str, win_prefix: str) -> str:
     """
-    Convert an absolute POSIX path under watch_root to a Windows UNC path.
+    Convert an absolute POSIX path under watch_root to a Windows path string.
 
-    Example:
-        /mnt/cube/Storage/foo/bar.txt  ->  \\\\cube.local\\Storage\\foo\\bar.txt
+    win_prefix is the Windows-side root, e.g.:
+        "\\\\cube.local\\Storage"  ->  \\cube.local\Storage\foo\bar.txt
+        "Z:"                       ->  Z:\foo\bar.txt
+
+    The prefix must NOT have a trailing backslash.
     """
     watch_root = watch_root.rstrip("/")
     rel = posix_path[len(watch_root):]  # '' for root itself, '/foo/bar' for children
     rel_win = rel.replace("/", "\\")
-    return f"\\\\{unc_host}\\{unc_share}{rel_win}"
+    return f"{win_prefix}{rel_win}"
+
+
+# Keep the old name as an alias so existing call sites that use the name
+# symbolically still work during any partial refactors.
+posix_to_unc = posix_to_win_path
 
 
 def make_efu_line(
@@ -105,8 +113,7 @@ def stat_to_row(
     posix_path: str,
     st: os.stat_result,
     watch_root: str,
-    unc_host: str,
-    unc_share: str,
+    win_prefix: str,
 ) -> dict:
     """
     Build a complete database row dict from a path and its stat result.
@@ -116,8 +123,8 @@ def stat_to_row(
     date_modified = posix_to_filetime(st.st_mtime)
     date_created = posix_to_filetime(getattr(st, "st_birthtime", st.st_ctime))
     attributes = attrs_from_stat(st, name)
-    unc_path = posix_to_unc(posix_path, watch_root, unc_host, unc_share)
-    efu_line = make_efu_line(unc_path, size, date_modified, date_created, attributes)
+    win_path = posix_to_win_path(posix_path, watch_root, win_prefix)
+    efu_line = make_efu_line(win_path, size, date_modified, date_created, attributes)
 
     return {
         "path": posix_path,
