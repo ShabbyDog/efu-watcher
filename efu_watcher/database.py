@@ -246,6 +246,64 @@ class Database:
     # Meta                                                                 #
     # ------------------------------------------------------------------ #
 
+    def get_win_prefix(self) -> Optional[str]:
+        """Return the win_prefix used to build the current efu_line values, or None."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT value FROM meta WHERE key = 'win_prefix'"
+            ).fetchone()
+        return row["value"] if row else None
+
+    def set_win_prefix(self, win_prefix: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO meta (key, value) VALUES ('win_prefix', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (win_prefix,),
+            )
+            self._conn.commit()
+
+    def recompute_efu_lines(self, watch_root: str, win_prefix: str, make_row_fn) -> int:
+        """
+        Recompute efu_line for every row using the new win_prefix.
+
+        make_row_fn(path, size, date_modified, date_created, attributes) -> efu_line str
+
+        Returns the number of rows updated.
+        """
+        watch_root = watch_root.rstrip("/")
+        count = 0
+        with self._lock:
+            cursor = self._conn.execute(
+                "SELECT path, size, date_modified, date_created, attributes FROM files"
+            )
+            updates = []
+            while True:
+                batch = cursor.fetchmany(5000)
+                if not batch:
+                    break
+                for row in batch:
+                    new_efu_line = make_row_fn(
+                        row["path"],
+                        row["size"],
+                        row["date_modified"],
+                        row["date_created"],
+                        row["attributes"],
+                    )
+                    updates.append((new_efu_line, row["path"]))
+                count += len(batch)
+
+            self._conn.executemany(
+                "UPDATE files SET efu_line = ? WHERE path = ?", updates
+            )
+            self._conn.execute(
+                "INSERT INTO meta (key, value) VALUES ('win_prefix', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (win_prefix,),
+            )
+            self._conn.commit()
+        return count
+
     def get_last_rebuild(self) -> Optional[datetime]:
         with self._lock:
             row = self._conn.execute(

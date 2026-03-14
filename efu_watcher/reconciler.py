@@ -11,7 +11,7 @@ import stat
 import time
 from typing import TYPE_CHECKING
 
-from efu_watcher.efu_writer import stat_to_row, filetime_to_posix
+from efu_watcher.efu_writer import make_efu_line, posix_to_win_path, stat_to_row, filetime_to_posix
 
 if TYPE_CHECKING:
     from efu_watcher.database import Database
@@ -65,6 +65,26 @@ class Reconciler:
         log.info("Reconciler starting full scan of %s", self._watch_root)
         t0 = time.monotonic()
 
+        # If win_prefix changed since the last run, all cached efu_line values
+        # are stale. Recompute them in the DB before doing anything else.
+        stored_prefix = self._db.get_win_prefix()
+        if stored_prefix is not None and stored_prefix != self._win_prefix:
+            log.info(
+                "win_prefix changed (%r -> %r); recomputing all efu_line values in DB",
+                stored_prefix,
+                self._win_prefix,
+            )
+
+            def _make_efu_line(path, size, date_modified, date_created, attributes):
+                win_path = posix_to_win_path(path, self._watch_root, self._win_prefix)
+                return make_efu_line(win_path, size, date_modified, date_created, attributes)
+
+            n = self._db.recompute_efu_lines(self._watch_root, self._win_prefix, _make_efu_line)
+            log.info("Recomputed efu_line for %d rows", n)
+        elif stored_prefix is None:
+            # First run — record the prefix so future changes are detected.
+            self._db.set_win_prefix(self._win_prefix)
+
         disk_entries = self._scan_disk()
         log.info("Disk scan complete: %d entries in %.1fs", len(disk_entries), time.monotonic() - t0)
 
@@ -104,6 +124,9 @@ class Reconciler:
             self._db.upsert_many(modified_rows)
         if deleted_paths:
             self._db.delete_many(list(deleted_paths))
+
+        # Always persist the current prefix so future restarts can detect changes.
+        self._db.set_win_prefix(self._win_prefix)
 
         log.info("DB sync complete — triggering EFU rebuild")
         self._efu_writer.full_rebuild(self._db)
