@@ -32,7 +32,7 @@ from efu_watcher import (
     WATCH_ROOT,
 )
 from efu_watcher.database import Database
-from efu_watcher.efu_writer import EfuWriter, make_efu_line, posix_to_unc, stat_to_row
+from efu_watcher.efu_writer import EfuWriter, has_surrogates, make_efu_line, posix_to_unc, stat_to_row
 from efu_watcher.reconciler import Reconciler
 from efu_watcher.watcher import (
     EVT_CREATE,
@@ -250,6 +250,9 @@ class EventProcessor(threading.Thread):
     def _handle_create(self, path: str, is_dir: bool) -> None:
         if path in self._exclude:
             return
+        if has_surrogates(path):
+            log.warning("Skipping create event for non-UTF-8 path: %r", path)
+            return
         try:
             st = os.stat(path)
         except FileNotFoundError:
@@ -291,6 +294,9 @@ class EventProcessor(threading.Thread):
 
     def _handle_modify(self, path: str) -> bool:
         if path in self._exclude:
+            return True
+        if has_surrogates(path):
+            log.warning("Skipping modify event for non-UTF-8 path: %r", path)
             return True
         old_line = self._db.get_efu_line(path)
         try:

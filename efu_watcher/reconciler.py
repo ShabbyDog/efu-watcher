@@ -24,6 +24,21 @@ log = logging.getLogger(__name__)
 _MTIME_TOLERANCE = 1.0
 
 
+def _has_surrogates(path: str) -> bool:
+    """
+    Return True if path contains surrogate escape characters.
+
+    os.walk() uses the surrogateescape error handler, so filenames with bytes
+    that are not valid UTF-8 appear as strings containing lone surrogates
+    (e.g. \\udc92). SQLite rejects these; Windows can't display them anyway.
+    """
+    try:
+        path.encode("utf-8")
+        return False
+    except UnicodeEncodeError:
+        return True
+
+
 class Reconciler:
     def __init__(
         self,
@@ -106,10 +121,16 @@ class Reconciler:
         entries: dict[str, os.stat_result] = {}
         count = 0
 
+        skipped = 0
         for dirpath, dirnames, filenames in os.walk(self._watch_root, followlinks=False):
             # Stat and record the directory itself (unless it's the watch root)
             if dirpath != self._watch_root:
                 if dirpath not in self._exclude:
+                    if _has_surrogates(dirpath):
+                        log.warning("Skipping directory with non-UTF-8 name: %r", dirpath)
+                        skipped += 1
+                        dirnames.clear()  # don't descend into it either
+                        continue
                     try:
                         st = os.stat(dirpath)
                         entries[dirpath] = st
@@ -122,6 +143,10 @@ class Reconciler:
                 full = os.path.join(dirpath, fname)
                 if full in self._exclude:
                     continue
+                if _has_surrogates(full):
+                    log.warning("Skipping file with non-UTF-8 name: %r", full)
+                    skipped += 1
+                    continue
                 try:
                     st = os.stat(full)
                     entries[full] = st
@@ -131,11 +156,15 @@ class Reconciler:
                 except OSError:
                     pass
 
-            # Prune excluded directories from the walk
+            # Prune excluded and non-UTF-8 directories from the walk
             dirnames[:] = [
                 d for d in dirnames
                 if os.path.join(dirpath, d) not in self._exclude
+                and not _has_surrogates(os.path.join(dirpath, d))
             ]
+
+        if skipped:
+            log.warning("Skipped %d entries with non-UTF-8 names (not indexable on Windows)", skipped)
 
         return entries
 

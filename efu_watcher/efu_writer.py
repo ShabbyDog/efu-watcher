@@ -92,6 +92,15 @@ def make_efu_line(
     return buf.getvalue()
 
 
+def has_surrogates(path: str) -> bool:
+    """Return True if path contains surrogate escape characters (invalid UTF-8 bytes)."""
+    try:
+        path.encode("utf-8")
+        return False
+    except UnicodeEncodeError:
+        return True
+
+
 def stat_to_row(
     posix_path: str,
     st: os.stat_result,
