@@ -1,9 +1,12 @@
 [Unit]
 Description=Everything EFU File List Watcher for /mnt/cube/Storage
 Documentation=https://github.com/bcm/efu-watcher
-After=network.target mnt-cube-Storage.mount
-Requires=mnt-cube-Storage.mount
-BindsTo=mnt-cube-Storage.mount
+After=network.target
+# WantsMountsFor tells systemd to order us after whatever .mount unit owns
+# /mnt/cube/Storage, without requiring you to know its exact unit name.
+# If the mount is not yet active at start time, the daemon's built-in
+# wait_for_mount() loop will retry every 30 seconds until it appears.
+WantsMountsFor=/mnt/cube/Storage
 
 [Service]
 Type=simple
