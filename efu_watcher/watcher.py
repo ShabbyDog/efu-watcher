@@ -162,6 +162,7 @@ class InotifyWatcher(threading.Thread):
                 continue
 
             for event in events:
+                log.debug("inotify raw: mask=0x%x wd=%d name=%r", event.mask, event.wd, event.name)
                 self._handle_event(event)
 
         log.info("InotifyWatcher stopped")
@@ -171,6 +172,16 @@ class InotifyWatcher(threading.Thread):
             pass
 
     def _handle_event(self, event) -> None:
+        # inotify signals queue overflow with a special event (wd=-1, IN_Q_OVERFLOW)
+        if INOTIFY_AVAILABLE and (event.mask & iflags.Q_OVERFLOW):
+            log.warning(
+                "inotify event queue overflow — some events lost; "
+                "a full rebuild will be scheduled"
+            )
+            self._event_queue.put_nowait({"type": "overflow", "path": "", "is_dir": False,
+                                          "cookie": 0, "timestamp": time.monotonic()})
+            return
+
         path = self._resolve_path(event)
         if path is None:
             return

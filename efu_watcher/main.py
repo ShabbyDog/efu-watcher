@@ -217,12 +217,16 @@ class EventProcessor(threading.Thread):
         if not events:
             return
 
-        log.debug("Processing batch of %d events", len(events))
+        log.info("Processing batch of %d events", len(events))
         needs_rebuild = False
 
         for evt in events:
             try:
-                if evt["type"] == "rename":
+                if evt["type"] == "overflow":
+                    log.warning("Overflow event: scheduling full rebuild")
+                    needs_rebuild = True
+                    continue
+                elif evt["type"] == "rename":
                     ok = self._handle_rename(evt["from_path"], evt["to_path"], evt["is_dir"])
                 elif evt["type"] == EVT_CREATE:
                     self._handle_create(evt["path"], evt["is_dir"])
