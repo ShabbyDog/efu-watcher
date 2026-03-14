@@ -1,0 +1,49 @@
+[Unit]
+Description=Everything EFU File List Watcher for /mnt/cube/Storage
+Documentation=https://github.com/bcm/efu-watcher
+After=network.target mnt-cube-Storage.mount
+Requires=mnt-cube-Storage.mount
+BindsTo=mnt-cube-Storage.mount
+
+[Service]
+Type=simple
+User=cube
+Group=cube
+WorkingDirectory=/opt/efu-watcher
+
+ExecStart=/opt/efu-watcher/venv/bin/python -m efu_watcher.main
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=60
+
+# Logging — systemd captures stdout to the journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=efu-watcher
+
+# Python must not buffer stdout so log lines appear in the journal promptly
+Environment=PYTHONUNBUFFERED=1
+
+# Daemon configuration — override any of these in /etc/efu-watcher/config.env
+Environment=WATCH_ROOT=/mnt/cube/Storage
+Environment=EFU_PATH=/mnt/cube/Storage/.everything_index.efu
+Environment=DB_PATH=/var/lib/efu-watcher/index.db
+Environment=UNC_HOST=cube.local
+Environment=UNC_SHARE=Storage
+Environment=DEBOUNCE_WINDOW=3.0
+Environment=DAILY_REBUILD_HOUR=3
+Environment=LOG_LEVEL=INFO
+Environment=MAX_PATCH_SIZE_MB=200
+
+# Optional site-local overrides (file is silently ignored if absent)
+EnvironmentFile=-/etc/efu-watcher/config.env
+
+# Filesystem hardening
+ReadWritePaths=/mnt/cube/Storage /var/lib/efu-watcher
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
